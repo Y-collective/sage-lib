@@ -1,9 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Roots\Sage;
 
 use Illuminate\Container\Container as BaseContainer;
 
+/**
+ * @extends BaseContainer
+ */
 class Container extends BaseContainer
 {
     /**
@@ -13,12 +18,12 @@ class Container extends BaseContainer
      */
     protected $terminatingCallbacks = [];
 
-    /**
-     * Register a terminating callback with the application.
-     *
-     * @param callable|string $callback
-     * @return $this
-     */
+/**
+ * Register a terminating callback with the container.
+ *
+ * @param  callable|string $callback
+ * @return $this
+ */
     public function terminating($callback)
     {
         $this->terminatingCallbacks[] = $callback;
@@ -26,11 +31,11 @@ class Container extends BaseContainer
         return $this;
     }
 
-    /**
-     * Terminate the application.
-     *
-     * @return void
-     */
+/**
+ * Execute all registered terminating callbacks.
+ *
+ * @return void
+ */
     public function terminate()
     {
         $index = 0;

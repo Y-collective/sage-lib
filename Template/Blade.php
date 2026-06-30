@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Roots\Sage\Template;
 
 use Illuminate\Contracts\Container\Container as ContainerContract;
@@ -9,69 +11,84 @@ use Illuminate\View\Engines\EngineInterface;
 use Illuminate\View\ViewFinderInterface;
 
 /**
- * Class BladeProvider
+ * High-level facade over the Illuminate View Factory for Blade templates.
  *
- * @method bool exists(string $view) Determine if a given view exists.
- * @method mixed share(array|string $key, mixed $value = null)
- * @method array creator(array|string $views, \Closure|string $callback)
- * @method array composer(array|string $views, \Closure|string $callback)
- * @method \Illuminate\View\View file(string $file, array $data = [], array $mergeData = [])
- * @method \Illuminate\View\View make(string $file, array $data = [], array $mergeData = [])
- * @method \Illuminate\View\View addNamespace(string $namespace, string|array $hints)
- * @method \Illuminate\View\View replaceNamespace(string $namespace, string|array $hints)
+ * Proxies unknown method calls to the underlying Factory instance.
+ *
+ * @method bool                                   exists(string $view)
+ * @method mixed                                  share(array|string $key, mixed $value = null)
+ * @method array                                  creator(array|string $views, \Closure|string $callback)
+ * @method array                                  composer(array|string $views, \Closure|string $callback)
+ * @method \Illuminate\View\View                  file(string $file, array $data = [], array $mergeData = [])
+ * @method \Illuminate\View\View                  make(string $file, array $data = [], array $mergeData = [])
+ * @method \Illuminate\View\View                  addNamespace(string $namespace, string|array $hints)
+ * @method \Illuminate\View\View                  replaceNamespace(string $namespace, string|array $hints)
  * @method \Illuminate\Contracts\Container\Container getContainer()
  */
 class Blade
 {
-    /** @var Factory */
-    protected $env;
+    /** @var FactoryContract The underlying view factory. */
+    protected \Illuminate\Contracts\View\Factory $env;
 
+    /** @var \Illuminate\View\Engines\EngineResolver|null Cached engine resolver. */
+    protected ?\Illuminate\View\Engines\EngineResolver $engineResolver = null;
+
+    /**
+     * @param FactoryContract $env The view factory instance.
+     */
     public function __construct(FactoryContract $env)
     {
         $this->env = $env;
     }
 
     /**
-     * Get the compiler
+     * Get the Blade compiler instance.
+     *
+     * Lazily resolves and caches the engine resolver from the container.
      *
      * @return \Illuminate\View\Compilers\BladeCompiler
      */
     public function compiler()
     {
-        static $engineResolver;
-        if (!$engineResolver) {
-            $engineResolver = $this->getContainer()->make('view.engine.resolver');
+        if (!$this->engineResolver) {
+            $this->engineResolver = $this->getContainer()->make('view.engine.resolver');
         }
-        return $engineResolver->resolve('blade')->getCompiler();
+        return $this->engineResolver->resolve('blade')->getCompiler();
     }
 
     /**
-     * @param string $view
-     * @param array  $data
-     * @param array  $mergeData
-     * @return string
+     * Render a view or file path as a string.
+     *
+     * Resolves file paths directly via file() and named views via make().
+     *
+     * @param  string $view      View name or file path.
+     * @param  array  $data      Data to pass to the view.
+     * @param  array  $mergeData Additional merge data.
+     * @return string Rendered content.
      */
-    public function render($view, $data = [], $mergeData = [])
+    public function render($view, $data = [], $mergeData = []): string
     {
-        /** @var \Illuminate\Contracts\Filesystem\Filesystem $filesystem */
-        $filesystem = $this->getContainer()['files'];
-        return $this->{$filesystem->exists($view) ? 'file' : 'make'}($view, $data, $mergeData)->render();
+        $filesystem = $this->getContainer()->make('files');
+        $method = $filesystem->exists($view) ? 'file' : 'make';
+        return $this->{$method}($view, $data, $mergeData)->render();
     }
 
     /**
-     * @param string $file
-     * @param array  $data
-     * @param array  $mergeData
-     * @return string
+     * Get the compiled (cached) file path for a given view.
+     *
+     * Compiles the view if the cached copy is expired.
+     *
+     * @param  string $file      View file path.
+     * @param  array  $data      Data for rendering (unused in path resolution).
+     * @param  array  $mergeData Merge data (unused in path resolution).
+     * @return string Compiled file path.
      */
-    public function compiledPath($file, $data = [], $mergeData = [])
+    public function compiledPath($file, $data = [], $mergeData = []): string
     {
         $rendered = $this->file($file, $data, $mergeData);
-        /** @var EngineInterface $engine */
         $engine = $rendered->getEngine();
 
         if (!($engine instanceof CompilerEngine)) {
-            // Using PhpEngine, so just return the file
             return $file;
         }
 
@@ -84,57 +101,55 @@ class Blade
     }
 
     /**
-     * @param string $file
-     * @return string
+     * Normalise a file path to a dot-notated view name.
+     *
+     * Strips registered view paths, file extensions, and leading slashes.
+     *
+     * @param  string $file Absolute or relative file path.
+     * @return string Normalised view name.
      */
-    public function normalizeViewPath($file)
+    public function normalizeViewPath($file): string
     {
-        // Convert `\` to `/`
         $view = str_replace('\\', '/', $file);
-
-        // Add namespace to path if necessary
         $view = $this->applyNamespaceToPath($view);
-
-        // Remove unnecessary parts of the path
         $view = str_replace(array_merge(
-            $this->getContainer()['config']['view.paths'],
+            $this->getContainer()->make('config')->get('view.paths'),
             ['.blade.php', '.php', '.css']
         ), '', $view);
-
-        // Remove superfluous and leading slashes
         return ltrim(preg_replace('%//+%', '/', $view), '/');
     }
 
     /**
-     * Convert path to view namespace
+     * Apply view namespace hints to a file path.
      *
-     * @param string $path
-     * @return string
+     * Replaces registered hint paths with their namespace prefix.
+     *
+     * @param  string $path File path to process.
+     * @return string Path with namespace prefix applied.
      */
-    public function applyNamespaceToPath($path)
+    public function applyNamespaceToPath($path): string
     {
-        /** @var ViewFinderInterface $finder */
-        $finder = $this->getContainer()['view.finder'];
+        $finder = $this->getContainer()->make('view.finder');
         if (!method_exists($finder, 'getHints')) {
             return $path;
         }
         $delimiter = $finder::HINT_PATH_DELIMITER;
         $hints = $finder->getHints();
         $view = array_reduce(array_keys($hints), function ($view, $namespace) use ($delimiter, $hints) {
-            return str_replace($hints[$namespace], $namespace.$delimiter, $view);
+            return str_replace($hints[$namespace], $namespace . $delimiter, $view);
         }, $path);
-        return preg_replace("%{$delimiter}[\\/]*%", $delimiter, $view);
+        return preg_replace("%{$delimiter}[\\\\/]*%", $delimiter, $view);
     }
 
     /**
-     * Pass any method to the view Factory instance.
+     * Proxy method calls to the underlying view Factory.
      *
-     * @param  string $method
-     * @param  array  $params
+     * @param  string $method Method name.
+     * @param  array  $params Parameters.
      * @return mixed
      */
     public function __call($method, $params)
     {
-        return call_user_func_array([$this->env, $method], $params);
+        return $this->env->{$method}(...$params);
     }
 }

@@ -1,40 +1,48 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Roots\Sage\Assets;
 
 /**
- * Class JsonManifest
- * @package Roots\Sage
- * @author QWp6t
+ * Reads a JSON-encoded asset manifest (e.g. mix-manifest.json).
+ *
+ * @implements ManifestInterface
  */
 class JsonManifest implements ManifestInterface
 {
-    /** @var array */
-    public $manifest;
+    /** @var array<string, string> Decoded manifest entries. */
+    public array $manifest;
 
-    /** @var string */
-    public $dist;
+    /** @var string Remote URI prefix for assets. */
+    public string $dist;
 
     /**
-     * JsonManifest constructor
-     *
-     * @param string $manifestPath Local filesystem path to JSON-encoded manifest
-     * @param string $distUri Remote URI to assets root
+     * @param string $manifestPath Local filesystem path to the JSON manifest file.
+     * @param string $distUri      Remote URI to the assets root directory.
      */
-    public function __construct($manifestPath, $distUri)
+    public function __construct(string $manifestPath, string $distUri)
     {
-        $this->manifest = file_exists($manifestPath) ? json_decode(file_get_contents($manifestPath), true) : [];
+        $this->manifest = is_file($manifestPath)
+            ? (json_decode(file_get_contents($manifestPath), true) ?? [])
+            : [];
         $this->dist = $distUri;
     }
 
-    /** @inheritdoc */
-    public function get($asset)
+    /**
+     * @param  string $asset Original filename.
+     * @return string Cache-busted filename, or the original if not found.
+     */
+    public function get($asset): string
     {
         return isset($this->manifest[$asset]) ? $this->manifest[$asset] : $asset;
     }
 
-    /** @inheritdoc */
-    public function getUri($asset)
+    /**
+     * @param  string $asset Original filename.
+     * @return string Full cache-busted URI.
+     */
+    public function getUri($asset): string
     {
         return "{$this->dist}/{$this->get($asset)}";
     }

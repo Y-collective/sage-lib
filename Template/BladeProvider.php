@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Roots\Sage\Template;
 
 use Illuminate\Container\Container;
@@ -9,18 +11,22 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\View\ViewServiceProvider;
 
 /**
- * Class BladeProvider
+ * Registers Blade-related services into an Illuminate container.
+ *
+ * Extends ViewServiceProvider to bind the filesystem, event dispatcher, config,
+ * view finder (with namespace support), Blade compiler, engine resolver, and
+ * view factory. Also registers a terminating callback for Component cache
+ * flushing via the parent.
  */
 class BladeProvider extends ViewServiceProvider
 {
     /**
-     * @param ContainerContract $container
-     * @param array             $config
-     * @SuppressWarnings(PHPMD.StaticAccess)
+     * @param ContainerContract|null $container The container to bind into, or null to use the global instance.
+     * @param array                  $config    Configuration array with 'view.paths', 'view.namespaces',
+     *                                          and 'view.compiled' keys.
      */
-    public function __construct(ContainerContract $container = null, $config = [])
+    public function __construct(?ContainerContract $container = null, array $config = [])
     {
-        /** @noinspection PhpParamsInspection */
         parent::__construct($container ?: Container::getInstance());
 
         $this->app->bindIf('config', function () use ($config) {
@@ -29,50 +35,59 @@ class BladeProvider extends ViewServiceProvider
     }
 
     /**
-     * Bind required instances for the service provider.
+     * Register the service provider.
+     *
+     * Binds filesystem and event dispatcher first, then delegates to the parent
+     * to register the view finder, Blade compiler, engine resolver, view factory,
+     * and the Component::flushCache terminating callback.
+     *
+     * @return void
      */
     public function register()
     {
         $this->registerFilesystem();
         $this->registerEvents();
-        $this->registerBladeCompiler();
-        $this->registerEngineResolver();
-        $this->registerViewFinder();
-        $this->registerFactory();
-        return $this;
+        parent::register();
     }
 
     /**
-     * Register Filesystem
+     * Register the filesystem binding.
+     *
+     * @return void
      */
     public function registerFilesystem()
     {
         $this->app->bindIf('files', Filesystem::class, true);
-        return $this;
     }
 
     /**
-     * Register the events dispatcher
+     * Register the event dispatcher binding.
+     *
+     * @return void
      */
     public function registerEvents()
     {
         $this->app->bindIf('events', Dispatcher::class, true);
-        return $this;
     }
 
     /**
-     * Register the view finder implementation.
+     * Register the view finder with namespace support.
+     *
+     * Overrides the parent to use FileViewFinder with hyphen-delimited fallback
+     * resolution and configured view namespaces.
+     *
+     * @return void
      */
     public function registerViewFinder()
     {
         $this->app->bindIf('view.finder', function ($app) {
-            $config = $this->app['config'];
-            $paths = $config['view.paths'];
-            $namespaces = $config['view.namespaces'];
-            $finder = new FileViewFinder($app['files'], $paths);
+            $config = $this->app->make('config');
+            $paths = $config->get('view.paths');
+            $namespaces = $config->get('view.namespaces');
+            $finder = new FileViewFinder($app->make('files'), $paths);
             array_map([$finder, 'addNamespace'], array_keys($namespaces), $namespaces);
+
             return $finder;
         }, true);
-        return $this;
     }
 }

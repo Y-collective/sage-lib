@@ -1,16 +1,8 @@
 language: php
-sudo: false
-dist: trusty
+dist: bionic
 php:
-  - 7.3
-  - 7.2
-  - 7.1
-  - nightly
-
-matrix:
-  fast_finish: true
-  allow_failures:
-    - php: nightly
+  - 8.3
+  - 8.4
 
 cache:
   apt: true

@@ -1,7 +1,7 @@
 {
   "name": "y-collective/sage-lib",
   "license": "MIT",
-  "description": "Library files for Sage Starter Theme",
+  "description": "Library files for Sage Starter Theme — PHP 8.3+ / Laravel 13 fork",
   "homepage": "https://roots.io/sage/",
   "authors": [
     {
@@ -19,7 +19,7 @@
     "wordpress"
   ],
   "support": {
-    "issues": "https://github.com/roots/sage-lib/issues",
+    "issues": "https://github.com/y-collective/sage-lib/issues",
     "forum": "https://discourse.roots.io/"
   },
   "autoload": {
@@ -27,19 +27,28 @@
       "Roots\\Sage\\": ""
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Roots\\Sage\\Tests\\": "tests/"
+    }
+  },
   "require": {
     "php": ">=8.3",
-    "composer/installers": "~2.3.0",
-    "illuminate/view": "~v13.2.0",
-    "illuminate/config": "~v13.2.0"
+    "composer/installers": "^2.3",
+    "illuminate/view": "^13.2.0",
+    "illuminate/config": "^13.2.0"
   },
   "require-dev": {
-    "squizlabs/php_codesniffer": "^4.0.0"
+    "phpunit/phpunit": "^13.0",
+    "squizlabs/php_codesniffer": "^4.0"
   },
   "scripts": {
     "test": [
-      "phpcs --ignore=vendor --extensions=php --standard=PSR2 ."
-    ]
+      "phpunit",
+      "phpcs --ignore=vendor --extensions=php --standard=PSR12 ."
+    ],
+    "lint": "phpcs --ignore=vendor --extensions=php --standard=PSR12 .",
+    "fix": "phpcbf --ignore=vendor --extensions=php --standard=PSR12 ."
   },
   "config": {
     "allow-plugins": {
